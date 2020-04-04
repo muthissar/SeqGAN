@@ -13,6 +13,7 @@ class Generator(object):
         self.sequence_length = sequence_length
         self.start_token = tf.constant([start_token] * self.batch_size, dtype=tf.int32)
         self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
+        #TODO: This is unused
         self.reward_gamma = reward_gamma
         self.g_params = []
         self.d_params = []
@@ -89,6 +90,11 @@ class Generator(object):
 
         self.g_predictions = tf.transpose(self.g_predictions.stack(), perm=[1, 0, 2])  # batch_size x seq_length x vocab_size
 
+        self.lls = tf.reduce_sum(
+                tf.one_hot(tf.to_int32(self.x), self.num_emb, 1.0, 0.0) * tf.log(
+                    tf.clip_by_value(self.g_predictions, 1e-20, 1.0)
+                ), 2)
+
         # pretraining loss
         self.pretrain_loss = -tf.reduce_sum(
             tf.one_hot(tf.to_int32(tf.reshape(self.x, [-1])), self.num_emb, 1.0, 0.0) * tf.log(
@@ -100,7 +106,7 @@ class Generator(object):
         pretrain_opt = self.g_optimizer(self.learning_rate)
 
         self.pretrain_grad, _ = tf.clip_by_global_norm(tf.gradients(self.pretrain_loss, self.g_params), self.grad_clip)
-        self.pretrain_updates = pretrain_opt.apply_gradients(zip(self.pretrain_grad, self.g_params))
+        self.pretrain_updates = pretrain_opt.apply_gradients(list(zip(self.pretrain_grad, self.g_params)))
 
         #######################################################################################################
         #  Unsupervised Training
@@ -115,12 +121,14 @@ class Generator(object):
         g_opt = self.g_optimizer(self.learning_rate)
 
         self.g_grad, _ = tf.clip_by_global_norm(tf.gradients(self.g_loss, self.g_params), self.grad_clip)
-        self.g_updates = g_opt.apply_gradients(zip(self.g_grad, self.g_params))
+        self.g_updates = g_opt.apply_gradients(list(zip(self.g_grad, self.g_params)))
 
     def generate(self, sess):
         outputs = sess.run(self.gen_x)
         return outputs
 
+    #def entropy(self,sess):
+        
     def pretrain_step(self, sess, x):
         outputs = sess.run([self.pretrain_updates, self.pretrain_loss], feed_dict={self.x: x})
         return outputs

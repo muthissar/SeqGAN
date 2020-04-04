@@ -77,8 +77,7 @@ class ROLLOUT(object):
         self.gen_x = self.gen_x.stack()  # seq_length x batch_size
         self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])  # batch_size x seq_length
 
-    #Gives more reliable estimations of the reward at each step
-    def get_reward(self, sess, input_x, rollout_num, discriminator):
+    def get_reward(self, sess, input_x, rollout_num, discriminator, ent_temp = 1.0):
         rewards = []
         for i in range(rollout_num):
             # given_num between 1 to sequence_length - 1 for a part completed sentence
@@ -109,6 +108,15 @@ class ROLLOUT(object):
                 rewards[self.sequence_length - 1] += ypred
 
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
+        #normalize batch
+        rewards = (rewards - np.mean(rewards))/np.std(rewards)
+        #add entropy
+        ent = sess.run(tf.cumsum(self.lstm.lls, reverse=True),{self.lstm.x: input_x})/ent_temp
+        #normalize ent #TODO is this allowed?
+        ent = (ent - np.mean(ent))/np.std(ent)
+
+        rewards -= ent/ent_temp
+
         return rewards
 
     def create_recurrent_unit(self):
