@@ -57,12 +57,12 @@ class Discriminator(object):
 
     def __init__(
             self, sequence_length, num_classes, vocab_size,
-            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0,learning_rate=1e-4):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
-
+        self.lr = learning_rate
         # Keeping track of l2 regularization loss (optional)
         l2_loss = tf.constant(0.0)
         
@@ -130,6 +130,6 @@ class Discriminator(object):
                 self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
         self.params = [param for param in tf.trainable_variables() if 'discriminator' in param.name]
-        d_optimizer = tf.train.AdamOptimizer(1e-4)
+        d_optimizer = tf.train.AdamOptimizer(self.lr)
         grads_and_vars = d_optimizer.compute_gradients(self.loss, self.params, aggregation_method=2)
         self.train_op = d_optimizer.apply_gradients(grads_and_vars)
