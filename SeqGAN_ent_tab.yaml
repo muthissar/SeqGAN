@@ -1,0 +1,61 @@
+GPU : '0' # if you have 2 GPU, use '0' or '1'
+
+#########################################################################################
+#  Generator  Hyper-parameters
+######################################################################################
+EMB_DIM : 4 # embedding dimension
+HIDDEN_DIM : 4 # hidden state dimension of lstm cell
+SEQ_LENGTH : 4 # sequence length
+START_TOKEN : 0
+
+PRE_GEN_EPOCH : 50 # supervise (maximum likelihood estimation) epochs for generator (default: 120)
+PRE_DIS_EPOCH : 50 # supervise (maximum likelihood estimation) epochs for discriminator (default: 50)
+SEED : 88
+BATCH_SIZE : 64
+generator_lr : 0.0025
+ROLLOUT_UPDATE_RATE: 0.8
+reward_gamma: 0.99
+# use x10 learning rate for adversarial training: mainly for slow & accurate pretraining & more weighted adv training
+x10adv_g: FALSE
+#########################################################################################
+#  Discriminator  Hyper-parameters
+#########################################################################################
+dis_embedding_dim: 4
+dis_filter_sizes: [1, 2, 3, 4]
+dis_num_filters: [10, 10, 10, 10]
+dis_dropout_keep_prob: 0.75
+dis_l2_reg_lambda: 0.2
+dis_batch_size: 64
+rollout_num : 32
+discriminator_lr : 0.0001
+#########################################################################################
+#  Basic Training Parameters
+#########################################################################################
+TOTAL_BATCH : 200
+# vocab size for our custom data
+vocab_size : 4
+# positive data
+positive_file : 'save/real_data_tab.txt'
+# negative data from the generator, containing fake sequences
+# specify different name if experimenting with multiple instances: causes EOF error & writing to same file from different instances
+negative_file : 'save/generator_sample_tab.txt'
+valid_file : ''
+generated_num : 10000
+
+epochs_generator : 1
+epochs_discriminator : 5
+epochs_discriminator_multiplier : 3
+
+pretrain : True
+# RL is stochastic: scrap and restart from pretrained checkpoint if things start failing
+infinite_loop: True
+# our dataset achives around 0.53 from pretraining
+loop_threshold: 0.5
+
+runmode_pretrain: 'skip'
+pretrain_file: 'model/pretrain_max_ent_tab.ckpt'
+runmode_advtrain: 'fresh'
+advtrain_file: 'model/advtrain_max_ent_tab.ckpt'
+#Entropy temperature (controls how much entropy affects the reward)
+#1 is normal 2 is halfed 
+ent_temp: 1

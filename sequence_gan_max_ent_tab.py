@@ -67,6 +67,7 @@ pretrain = Runmode[config['runmode_pretrain']] #Enum('Runmode', config['runmode_
 advtrain = Runmode[config['runmode_advtrain']]
 pretrain_file = config['pretrain_file']
 advtrain_file = config['advtrain_file']
+ent_temp = config['ent_temp']
 
 
 
@@ -128,7 +129,7 @@ def main():
         saver.restore(sess, advtrain_file)
     if advtrain != Runmode.skip:
         gan_trainer.advtrain(sess,saver,TOTAL_BATCH,BATCH_SIZE,epochs_generator,epochs_discriminator,
-            DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob)
+            DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob,ent_temp)
     gan_trainer.log.close()
 
 if __name__ == '__main__':

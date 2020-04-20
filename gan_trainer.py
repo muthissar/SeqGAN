@@ -61,7 +61,7 @@ class GanTrainer:
         # Train 3 epoch on the generated data and do this for 50 times
         for epoch in range(PRE_DIS_EPOCH):
             self.generate_samples(sess, self.generator, self.BATCH_SIZE, generated_num, self.negative_file)
-            self.dis_data_loader.load_train_data(self.positive_file, self.negative_file,generated_num)
+            self.dis_data_loader.load_train_data(self.positive_file, self.negative_file)
             for i in range(DIS_EPOCHS_PR_BATCH):
                 self.dis_data_loader.reset_pointer()
                 for it in range(self.dis_data_loader.num_batch):
@@ -87,13 +87,13 @@ class GanTrainer:
         print('pre-train entropy: ', sess.run(self.generator.pretrain_loss,
             {self.generator.x: self.generator.generate(sess)}))
     def advtrain(self,sess,saver,TOTAL_BATCH,BATCH_SIZE,epochs_generator,epochs_discriminator,
-        DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob):
+        DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob,ent_temp):
         print('#########################################################################')
         print('Start Adversarial Training...')
         self.log.write('adversarial training...\n')
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
-            test_loss , g_loss = self.advtrain_gen(sess,epochs_generator,rollout_num)
+            test_loss , g_loss = self.advtrain_gen(sess,epochs_generator,rollout_num,ent_temp)
             # Test
             if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
                 #generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
@@ -113,18 +113,18 @@ class GanTrainer:
             for i in range(10):
                 predictions = np.concatenate((predictions,sess.run(self.discriminator.ypred_for_auc, {self.discriminator.input_x: self.generator.generate(sess), self.discriminator.dropout_keep_prob: dis_dropout_keep_prob})[:,class_]))
             self.writer.add_scalar('Loss/discrim_loss', disc_loss, total_batch)
-            print("discrim  --  min: {}, max: {}, max mean: {}, loss: {}".format(min(predictions),max(predictions),np.mean(predictions),disc_loss))
+            print("discrim  --  min: {}, max: {}, ll: {}, loss: {}".format(min(predictions),max(predictions),np.mean(np.log(predictions)),disc_loss))
             #print("disc_loss: {}".format(disc_loss))
             #print("trained disc --- %s seconds ---" % (time.time() - start_time))
 
 
 
-    def advtrain_gen(self,sess,epochs_generator,rollout_num):
+    def advtrain_gen(self,sess,epochs_generator,rollout_num,ent_temp):
         # Train the generator for one step
             
         for it in range(epochs_generator):
             samples = self.generator.generate(sess)
-            rewards = self.rollout.get_reward(sess, samples, rollout_num, self.discriminator)
+            rewards = self.rollout.get_reward(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
             feed = {self.generator.x: samples, self.generator.rewards: rewards}
             _ = sess.run(self.generator.g_updates, feed_dict=feed)
         
