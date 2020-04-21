@@ -38,6 +38,7 @@ class GanTrainer:
 
         return np.mean(supervised_g_losses)
     def calculate_bleu(self,sess, trainable_model, data_loader):
+        #TODO: ONLY GENERATE A FEW SAMPLES IN HYPOYHESIS
         # bleu score implementation
         # used for performance evaluation for pre-training & adv. training
         # separate true dataset to the valid set
@@ -88,7 +89,7 @@ class GanTrainer:
             if epoch % 5 == 0:
                 #generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
                 samples = self.generator.generate(sess)
-                test_loss = - self.target.ll(samples, sess) if self.target is not None else math.nan
+                test_loss = - self.target.ll(samples=samples, sess=sess) if self.target is not None else math.nan
                 #likelihood_data_loader.create_batches(eval_file)
                 #test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
                 # measure bleu score with the validation set
@@ -172,13 +173,13 @@ class GanTrainer:
                 predictions = np.concatenate((predictions,sess.run(self.discriminator.ypred_for_auc, {self.discriminator.input_x: self.generator.generate(sess), self.discriminator.dropout_keep_prob: dis_dropout_keep_prob})[:,class_]))
             self.writer.add_scalar('Loss/discrim_loss', disc_loss, total_batch)
             print("discrim  --  min: {}, max: {}, ll: {}, loss: {}".format(min(predictions),max(predictions),np.mean(np.log(predictions)),disc_loss))
-            if True: #config['infinite_loop']:
-                if bleu_score < 0.5: #config['loop_threshold']:
-                    buffer = 'Mode collapse detected, restarting from pretrained model...'
-                    print(buffer)
-                    self.log.write(buffer + '\n')
-                    self.log.flush()
-                    #load_checkpoint(sess, saver)
+            #if True: #config['infinite_loop']:
+            #    if bleu_score < 0.5: #config['loop_threshold']:
+            #        buffer = 'Mode collapse detected, restarting from pretrained model...'
+            #        print(buffer)
+            #        self.log.write(buffer + '\n')
+            #        self.log.flush()
+            #        #load_checkpoint(sess, saver)
             if self.music:
                 # generate random test samples and postprocess the sequence to midi file
                 self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
@@ -203,7 +204,7 @@ class GanTrainer:
         # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
         # Update roll-out parameters
         self.rollout.update_params()
-        test_loss = - self.target.ll(samples) if self.target is not None else math.nan
+        test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
         #print("rollout --- %s seconds ---" % (time.time() - start_time))
         # Train the discriminator
         g_loss = sess.run(self.generator.g_loss, feed_dict=feed)

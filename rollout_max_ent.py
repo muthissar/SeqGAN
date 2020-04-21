@@ -109,11 +109,11 @@ class ROLLOUT(object):
 
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
         #normalize batch
-        rewards = (rewards - np.mean(rewards))/np.std(rewards)
+        rewards = (rewards - np.mean(rewards,axis = 0))/np.std(rewards, axis = 0)
         #add entropy
         ent = sess.run(tf.cumsum(self.lstm.lls, reverse=True),{self.lstm.x: input_x})/ent_temp
         #normalize ent #TODO is this allowed?
-        ent = (ent - np.mean(ent))/np.std(ent)
+        ent = (ent - np.mean(ent,axis = 0))/np.std(ent,axis = 0)
 
         rewards -= ent/ent_temp
 

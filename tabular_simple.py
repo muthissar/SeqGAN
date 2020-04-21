@@ -60,7 +60,8 @@ class TabularSimple:
             return  - np.mean(p * np.log(q))
     '''
 
-    def ll(self,samples):
+    def ll(self,**kwargs):
+        samples = kwargs['samples']
         batch_size , seq_length = samples.shape
         ll = 0
         for sample_j in range(batch_size):
