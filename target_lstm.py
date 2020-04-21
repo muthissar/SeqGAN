@@ -181,3 +181,8 @@ class TARGET_LSTM(object):
             return logits
 
         return unit
+
+    def ll(self, samples, sess):
+        # target_loss means the oracle negative log-likelihood tested with the oracle model "target_lstm"
+        # For more details, please see the Section 4 in https://arxiv.org/abs/1609.05473
+        return -sess.run(self.pretrain_loss, {self.x: samples})

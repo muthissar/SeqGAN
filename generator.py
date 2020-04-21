@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.ops import tensor_array_ops, control_flow_ops
+import pickle
 
-
-class Generator(object):
+class Generator:
     def __init__(self, num_emb, batch_size, emb_dim, hidden_dim,
                  sequence_length, start_token,
                  learning_rate=0.01, reward_gamma=0.95):
@@ -133,6 +133,19 @@ class Generator(object):
         outputs = sess.run([self.pretrain_updates, self.pretrain_loss], feed_dict={self.x: x})
         return outputs
 
+    # new implementation
+    # calculate nll loss without update
+    # used for observing normal training loss signal, but do not update the supervised gradient
+    def calculate_nll_loss_step(self, sess, x):
+        output = sess.run(self.pretrain_loss, feed_dict={self.x: x})
+        return output
+
+    # conditional sequence generation method
+    # provide the start token ,instead of always zero start
+    def predict(self, sess, x, start_token):
+        pred = sess.run(self.gen_x, feed_dict={self.x: x, self.start_token: start_token})
+        return pred
+
     def init_matrix(self, shape):
         return tf.random_normal(shape, stddev=0.1)
 
@@ -215,3 +228,29 @@ class Generator(object):
 
     def g_optimizer(self, *args, **kwargs):
         return tf.train.AdamOptimizer(*args, **kwargs)
+    
+    def generate_samples(self,sess, batch_size, generated_num, output_file):
+        # Generate Samples
+        generated_samples = []
+        for _ in range(int(generated_num / batch_size)):
+            generated_samples.extend(self.generate(sess))
+
+        with open(output_file, 'w') as fout:
+            for poem in generated_samples:
+                buffer = ' '.join([str(x) for x in poem]) + '\n'
+                fout.write(buffer)
+
+class MusicGenerator(Generator):
+
+    def generate_samples(self, sess, batch_size, generated_num, output_file):
+        # unconditinally generate random samples
+        # it is used for test sample generation & negative data generation
+        # called per D learning phase
+
+        # Generate Samples
+        generated_samples = []
+        for _ in range(int(generated_num / batch_size)):
+            generated_samples.extend(self.generate(sess))
+        # dump the pickle data
+        with open(output_file, 'wb') as fp:
+            pickle.dump(generated_samples, fp, protocol=2)
