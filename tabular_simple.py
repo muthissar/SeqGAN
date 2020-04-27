@@ -44,6 +44,9 @@ class TabularSimple:
                 samples[sample_j][i] = word
                 key +=  "|" + str(word)
         return samples
+    def generate(self, **kwargs):
+        batch_size = kwargs['batch_size']
+        return self.sample(batch_size)
     '''
     def cross_entropy(self,model,sess):
         for key in self.table.keys():

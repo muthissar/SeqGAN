@@ -100,9 +100,10 @@ class TARGET_LSTM(object):
             ), 1
         )  # batch_size
 
-    def generate(self, session):
+    def generate(self, **kwargs):
         # h0 = np.random.normal(size=self.hidden_dim)
-        outputs = session.run(self.gen_x)
+        sess = kwargs['sess']
+        outputs = sess.run(self.gen_x)
         return outputs
 
     def init_matrix(self, shape):
