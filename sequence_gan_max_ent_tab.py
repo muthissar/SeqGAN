@@ -89,6 +89,7 @@ def main():
     music = config['is_music_data']
     target_class = config['target_class'] if 'target_class' in config else False 
     save = config['save_model']
+    normalize_rewards = config['rewards_normalize']
     random.seed(SEED)
     np.random.seed(SEED)
     assert START_TOKEN == 0
@@ -125,7 +126,7 @@ def main():
     saver = tf.train.Saver()
 
     
-    rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE)
+    rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, pretrain_file, advtrain_file, 
         positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, save)

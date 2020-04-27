@@ -92,7 +92,16 @@ class GanTrainer:
         test_loss = np.mean([sess.run(self.generator.pretrain_loss, {self.generator.x: \
             self.target.generate(sess=sess,batch_size = self.BATCH_SIZE)}) if\
             self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
-        return test_loss     
+        return test_loss
+
+    def cross_p_q_2(self, sess):
+        for _ in range(self.gen_data_loader.num_batch):
+            batch = self.gen_data_loader.next_batch()
+            g_loss = sess.run(trainable_model.pretrain_loss,
+                {trainable_model: batch }
+            )
+            supervised_g_losses.append(g_loss)
+        return np.mean(supervised_g_losses)
     def cross_q_p(self, sess):
         #samples = self.generator.generate(sess)
         #test_loss = - self.target.ll(samples=samples, sess=sess) if self.target is not None else math.nan
@@ -104,7 +113,7 @@ class GanTrainer:
             self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
         return test_loss
     
-    def log_gen(self,sess,epoch):
+    def log_gen(self, sess, epoch, cross_p_q_2):
         cross_p_q = self.cross_p_q(sess)
         cross_q_p = self.cross_q_p(sess)
         ent_p = sess.run(self.generator.pretrain_loss,
@@ -144,9 +153,9 @@ class GanTrainer:
     def pretrain_generator(self,sess,PRE_GEN_EPOCH,saver,generated_num):
         self.gen_data_loader.create_batches(self.positive_file)
         for epoch in range(PRE_GEN_EPOCH):
-            loss = self.pre_train_epoch(sess, self.generator, self.gen_data_loader)
+            cross_p_q_2 = self.pre_train_epoch(sess, self.generator, self.gen_data_loader)
             if epoch % 5 == 0:
-                self.log_gen(sess, epoch)
+                self.log_gen(sess, epoch, cross_p_q_2)
                 if self.save:
                     saver.save(sess, self.pretrain_file)
                 # generate 5 test samples per epoch
@@ -198,15 +207,15 @@ class GanTrainer:
         self.log.write('adversarial training...\n')
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
-            g_loss = self.advtrain_gen(sess,epochs_generator,rollout_num,ent_temp)
+            g_loss = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
             # Test
             if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-                self.log_gen(sess, total_batch)
+                self.log_gen(sess, total_batch, self.cross_p_q_2(sess))
                 self.log_gen_adv(sess, g_loss, total_batch)
 
             disc_loss = self.advtrain_disc(sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
                 BATCH_SIZE, generated_num, self.positive_file, self.negative_file, dis_dropout_keep_prob)
-            
+            self.log_disc(sess, total_batch, disc_loss)
             #if True: #config['infinite_loop']:
             #    if bleu_score < 0.5: #config['loop_threshold']:
             #        buffer = 'Mode collapse detected, restarting from pretrained model...'
@@ -262,5 +271,6 @@ class GanTrainer:
         if self.save:
             saver.save(sess, self.advtrain_file)
         disc_loss = sess.run(self.discriminator.loss, feed)
-        return disc_loss
+        cross_p_q_2 = 
+        return disc_loss, 
 

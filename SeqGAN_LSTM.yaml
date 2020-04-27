@@ -67,3 +67,4 @@ target_class: TARGET_LSTM
 target_args: 'save/target_params_py3.pkl'
 
 save_model: False
+reward_normalize: True

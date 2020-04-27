@@ -4,9 +4,10 @@ import numpy as np
 
 
 class ROLLOUT(object):
-    def __init__(self, lstm, update_rate):
+    def __init__(self, lstm, update_rate, normalize=True):
         self.lstm = lstm
         self.update_rate = update_rate
+        self.normalize = normalize
 
         self.num_emb = self.lstm.num_emb
         self.batch_size = self.lstm.batch_size
@@ -109,11 +110,13 @@ class ROLLOUT(object):
 
         rewards = np.transpose(np.array(rewards)) / (1.0 * rollout_num)  # batch_size x seq_length
         #normalize batch
-        rewards = (rewards - np.mean(rewards,axis = 0))/np.std(rewards, axis = 0)
+        if self.normalize:
+            rewards = (rewards - np.mean(rewards,axis = 0))/np.std(rewards, axis = 0)
         #add entropy
         ent = sess.run(tf.cumsum(self.lstm.lls, reverse=True),{self.lstm.x: input_x})/ent_temp
         #normalize ent #TODO is this allowed?
-        ent = (ent - np.mean(ent,axis = 0))/np.std(ent,axis = 0)
+        if self.normalize:
+            ent = (ent - np.mean(ent,axis = 0))/np.std(ent,axis = 0)
 
         rewards -= ent/ent_temp
 

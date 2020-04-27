@@ -66,3 +66,5 @@ target_class: TabularSimple
 target_args: [4, 4, 2]
 
 save_model: False
+
+reward_normalize: True
