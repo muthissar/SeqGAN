@@ -66,3 +66,4 @@ is_music_data: False
 target_class: TARGET_LSTM
 target_args: 'save/target_params_py3.pkl'
 
+save_model: False

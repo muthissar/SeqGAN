@@ -8,7 +8,7 @@ import math
 class GanTrainer:
     def __init__(self,generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target,pretrain_file, advtrain_file, 
-        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music):
+        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save):
         self.generator = generator
         self.discriminator = discriminator
         self.rollout = rollout
@@ -25,6 +25,7 @@ class GanTrainer:
         self.BATCH_SIZE = BATCH_SIZE
         self.START_TOKEN = START_TOKEN
         self.music = music
+        self.save = save
         
     def pre_train_epoch(self, sess, trainable_model, data_loader):
         # Pre-train the generator using MLE for one epoch
@@ -80,25 +81,69 @@ class GanTrainer:
         bleu = np.mean(result)
 
         return bleu
+    
+    def cross_p_q(self, sess):
+        #samples = self.generator.generate(sess)
+        #test_loss = - self.target.ll(samples=samples, sess=sess) if self.target is not None else math.nan
+        #NOTE: in order for test loss to be stable we need a lot of samples. This should vary on model
+        #TODO: make this a variable
+        n_samples = 2**14
+        #samples = np.concatenate([self.target.generate(sess=sess,batch_size = self.BATCH_SIZE) for  _ in range(max(1,int(n_samples/self.BATCH_SIZE)))])
+        test_loss = np.mean([sess.run(self.generator.pretrain_loss, {self.generator.x: \
+            self.target.generate(sess=sess,batch_size = self.BATCH_SIZE)}) if\
+            self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
+        return test_loss     
+    def cross_q_p(self, sess):
+        #samples = self.generator.generate(sess)
+        #test_loss = - self.target.ll(samples=samples, sess=sess) if self.target is not None else math.nan
+        #NOTE: in order for test loss to be stable we need a lot of samples. This should vary on model
+        #TODO: make this a variable
+        n_samples = 2**14
+        #samples = np.concatenate([self.target.generate(sess=sess,batch_size = self.BATCH_SIZE) for  _ in range(max(1,int(n_samples/self.BATCH_SIZE)))])
+        test_loss = np.mean([-self.target.ll(samples=self.generator.generate(sess), sess=sess) if\
+            self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
+        return test_loss
+    
+    def log_gen(self,sess,epoch):
+        cross_p_q = self.cross_p_q(sess)
+        cross_q_p = self.cross_q_p(sess)
+        ent_p = sess.run(self.generator.pretrain_loss,
+            {self.generator.x: self.generator.generate(sess)})
+        self.writer.add_scalar('Loss/cross_p_q', cross_p_q, epoch)
+        self.writer.add_scalar('Loss/cross_q_p', cross_q_p, epoch)
+        self.writer.add_scalar('Loss/ent_p', ent_p, epoch)
+        # measure bleu score with the validation set
+        #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
+        print('epoch: {}, cross(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
+            epoch,
+            cross_p_q,
+            cross_q_p,
+            ent_p
+        ))
         
+    def log_gen_adv(self, sess, g_loss, epoch):
+        self.writer.add_scalar('Loss/rein_max_ent', g_loss, epoch)
+        print('epoch: {}, rein_max_ent_loss: {}'.format(
+            epoch,
+            g_loss
+        ))
+    def log_disc(self, sess, epoch, disc_loss):
+        self.writer.add_scalar('Loss/discrim_loss', disc_loss, epoch)
+        print("epoch: {}, discrim_loss: {}.")
+        #class_ = 0
+        #predictions = np.array([])
+        #TODO: not right loss as it's not taking into account the 
+        #for i in range(10):
+        #    predictions = np.concatenate((predictions,sess.run(self.discriminator.ypred_for_auc, {self.discriminator.input_x: self.generator.generate(sess), self.discriminator.dropout_keep_prob: dis_dropout_keep_prob})[:,class_]))
+        #self.writer.add_scalar('Loss/discrim_loss', disc_loss, total_batch)
+        #print("discrim  --  min: {}, max: {}, ll: {}, loss: {}".format(min(predictions),max(predictions),,disc_loss))
 
     def pretrain_generator(self,sess,PRE_GEN_EPOCH,saver,generated_num):
         self.gen_data_loader.create_batches(self.positive_file)
         for epoch in range(PRE_GEN_EPOCH):
             loss = self.pre_train_epoch(sess, self.generator, self.gen_data_loader)
             if epoch % 5 == 0:
-                #generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-                samples = self.generator.generate(sess)
-                test_loss = - self.target.ll(samples=samples, sess=sess) if self.target is not None else math.nan
-                #likelihood_data_loader.create_batches(eval_file)
-                #test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-                # measure bleu score with the validation set
-                #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
-                print('pre-train epoch ', epoch, 'test_loss ', test_loss)
-                #buffer = 'epoch:\t'+ str(epoch) + '\tnll:\t' + str(test_loss) + '\tbleu:\t' + str(bleu_score) + '\n' 
-                buffer = 'epoch:\t'+ str(epoch) + '\tnll:\t' + str(test_loss) + '\n' 
-                self.writer.add_scalar('Loss/pre_oracle_nll', test_loss, epoch)
-                self.log.write(buffer)
+                self.log_gen(sess, epoch)
                 saver.save(sess, self.pretrain_file)
                 # generate 5 test samples per epoch
                 # it automatically samples from the generator and postprocess to midi file
@@ -130,7 +175,7 @@ class GanTrainer:
                     }
                     _ = sess.run(self.discriminator.train_op, feed)
             saver.save(sess, self.pretrain_file)
-            self.writer.add_scalar('Loss/pre_discrim_loss', sess.run(self.discriminator.loss, feed), epoch)
+            self.log_disc(sess, epoch, sess.run(self.discriminator.loss, feed))
 
     def pretrain(self,sess, PRE_GEN_EPOCH, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
         saver,dis_dropout_keep_prob,generated_num):
@@ -141,8 +186,6 @@ class GanTrainer:
         self.pretrain_discrim(sess, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
         saver,dis_dropout_keep_prob,generated_num)
         self.gen_data_loader.create_batches(self.positive_file)
-        print('pre-train entropy: ', sess.run(self.generator.pretrain_loss,
-            {self.generator.x: self.generator.generate(sess)}))
     def advtrain(self,sess,saver,TOTAL_BATCH,BATCH_SIZE,epochs_generator,epochs_discriminator,
         DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob,ent_temp):
         print('#########################################################################')
@@ -150,29 +193,15 @@ class GanTrainer:
         self.log.write('adversarial training...\n')
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
-            test_loss , g_loss = self.advtrain_gen(sess,epochs_generator,rollout_num,ent_temp)
+            g_loss = self.advtrain_gen(sess,epochs_generator,rollout_num,ent_temp)
             # Test
             if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-                #generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
-                #likelihood_data_loader.create_batches(eval_file)
-                #test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
-                #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
-                #buffer = 'epoch:\t' + str(total_batch) + '\tnll:\t' + str(test_loss) + '\tbleu:\t' + str(bleu_score) + '\n'
-                buffer = 'epoch:\t' + str(total_batch) + '\tnll:\t' + str(test_loss)  + '\n'
-                policy_entropy = sess.run(self.generator.pretrain_loss, {
-                    self.generator.x: self.generator.generate(sess)})
-                print('total_batch: ', total_batch, 'test_loss: ', test_loss, 
-                    'g_loss: ', g_loss ,' policy entropy: ',policy_entropy)
-                self.writer.add_scalar('Loss/oracle_nll', test_loss, total_batch)
-                self.log.write(buffer)
+                self.log_gen(sess, total_batch)
+                self.log_gen_adv(sess, g_loss, total_batch)
+
             disc_loss = self.advtrain_disc(sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
                 BATCH_SIZE, generated_num, self.positive_file, self.negative_file, dis_dropout_keep_prob)
-            class_ = 0
-            predictions = np.array([])
-            for i in range(10):
-                predictions = np.concatenate((predictions,sess.run(self.discriminator.ypred_for_auc, {self.discriminator.input_x: self.generator.generate(sess), self.discriminator.dropout_keep_prob: dis_dropout_keep_prob})[:,class_]))
-            self.writer.add_scalar('Loss/discrim_loss', disc_loss, total_batch)
-            print("discrim  --  min: {}, max: {}, ll: {}, loss: {}".format(min(predictions),max(predictions),np.mean(np.log(predictions)),disc_loss))
+            
             #if True: #config['infinite_loop']:
             #    if bleu_score < 0.5: #config['loop_threshold']:
             #        buffer = 'Mode collapse detected, restarting from pretrained model...'
@@ -204,11 +233,11 @@ class GanTrainer:
         # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
         # Update roll-out parameters
         self.rollout.update_params()
-        test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
+        #test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
         #print("rollout --- %s seconds ---" % (time.time() - start_time))
         # Train the discriminator
         g_loss = sess.run(self.generator.g_loss, feed_dict=feed)
-        return test_loss , g_loss
+        return g_loss
 
     def advtrain_disc(self,sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
         BATCH_SIZE, generated_num, positive_file, negative_file, dis_dropout_keep_prob):

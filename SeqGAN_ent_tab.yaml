@@ -64,3 +64,5 @@ is_music_data: False
 
 target_class: TabularSimple
 target_args: [4, 4, 2]
+
+save_model: False
