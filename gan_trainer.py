@@ -129,7 +129,10 @@ class GanTrainer:
         ))
     def log_disc(self, sess, epoch, disc_loss):
         self.writer.add_scalar('Loss/discrim_loss', disc_loss, epoch)
-        print("epoch: {}, discrim_loss: {}.")
+        print("epoch: {}, discrim_loss: {}.".format(
+            epoch,
+            disc_loss
+        ))
         #class_ = 0
         #predictions = np.array([])
         #TODO: not right loss as it's not taking into account the 
@@ -144,7 +147,8 @@ class GanTrainer:
             loss = self.pre_train_epoch(sess, self.generator, self.gen_data_loader)
             if epoch % 5 == 0:
                 self.log_gen(sess, epoch)
-                saver.save(sess, self.pretrain_file)
+                if self.save:
+                    saver.save(sess, self.pretrain_file)
                 # generate 5 test samples per epoch
                 # it automatically samples from the generator and postprocess to midi file
                 # midi files are saved to the pre-defined folder
@@ -174,7 +178,8 @@ class GanTrainer:
                         self.discriminator.dropout_keep_prob: dis_dropout_keep_prob
                     }
                     _ = sess.run(self.discriminator.train_op, feed)
-            saver.save(sess, self.pretrain_file)
+            if self.save:
+                saver.save(sess, self.pretrain_file)
             self.log_disc(sess, epoch, sess.run(self.discriminator.loss, feed))
 
     def pretrain(self,sess, PRE_GEN_EPOCH, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
@@ -254,7 +259,8 @@ class GanTrainer:
                         self.discriminator.dropout_keep_prob: dis_dropout_keep_prob
                     }
                     _ = sess.run(self.discriminator.train_op, feed)
-        saver.save(sess, self.advtrain_file)
+        if self.save:
+            saver.save(sess, self.advtrain_file)
         disc_loss = sess.run(self.discriminator.loss, feed)
         return disc_loss
 
