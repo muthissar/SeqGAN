@@ -95,10 +95,11 @@ class GanTrainer:
         return test_loss
 
     def cross_p_q_2(self, sess):
-        for _ in range(self.gen_data_loader.num_batch):
-            batch = self.gen_data_loader.next_batch()
-            g_loss = sess.run(trainable_model.pretrain_loss,
-                {trainable_model: batch }
+        supervised_g_losses = []
+        for _ in range(self.eval_data_loader.num_batch):
+            batch = self.eval_data_loader.next_batch()
+            g_loss = sess.run(self.generator.pretrain_loss,
+                {self.generator.x: batch}
             )
             supervised_g_losses.append(g_loss)
         return np.mean(supervised_g_losses)
@@ -119,13 +120,15 @@ class GanTrainer:
         ent_p = sess.run(self.generator.pretrain_loss,
             {self.generator.x: self.generator.generate(sess)})
         self.writer.add_scalar('Loss/cross_p_q', cross_p_q, epoch)
+        self.writer.add_scalar('Loss/cross_p_q_2', cross_p_q_2, epoch)
         self.writer.add_scalar('Loss/cross_q_p', cross_q_p, epoch)
         self.writer.add_scalar('Loss/ent_p', ent_p, epoch)
         # measure bleu score with the validation set
         #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
-        print('epoch: {}, cross(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
+        print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
             epoch,
             cross_p_q,
+            cross_p_q_2,
             cross_q_p,
             ent_p
         ))
@@ -271,6 +274,5 @@ class GanTrainer:
         if self.save:
             saver.save(sess, self.advtrain_file)
         disc_loss = sess.run(self.discriminator.loss, feed)
-        cross_p_q_2 = 
-        return disc_loss, 
+        return disc_loss
 
