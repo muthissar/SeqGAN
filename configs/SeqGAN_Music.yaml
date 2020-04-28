@@ -53,9 +53,9 @@ pretrain : True
 infinite_loop: True
 # our dataset achives around 0.53 from pretraining
 loop_threshold: 0.5
-runmode_pretrain: 'fresh'
+runmode_pretrain: 'skip'
 pretrain_file: 'model/pretrain_max_ent_music.ckpt'
-runmode_advtrain: 'skip'
+runmode_advtrain: 'fresh'
 advtrain_file: 'model/advtrain_max_ent_music.ckpt'
 #Entropy temperature (controls how much entropy affects the reward)
 #1 is normal 2 is halfed 
@@ -63,5 +63,5 @@ ent_temp: 1
 
 is_music_data: True
 
-save_model: True
+save_model: False
 rewards_normalize: True

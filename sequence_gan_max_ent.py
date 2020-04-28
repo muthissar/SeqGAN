@@ -97,9 +97,9 @@ def main():
     discriminator = Discriminator(sequence_length=20, num_classes=2, vocab_size=vocab_size, embedding_size=dis_embedding_dim, 
                                 filter_sizes=dis_filter_sizes, num_filters=dis_num_filters, l2_reg_lambda=dis_l2_reg_lambda)
 
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
+    sess = tf.compat.v1.Session(config=config)
     class Runmode(Enum):
         fresh = 1
         con = 2
@@ -109,16 +109,16 @@ def main():
     pretrain_file = 'model/pretrain_max_ent.ckpt'
     advtrain = Runmode.fresh 
     advtrain_file = 'model/advtrain_max_ent.ckpt'
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     log = open('save/experiment-log.txt', 'w')
     if pretrain == Runmode.fresh:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
     if pretrain == Runmode.con:
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         saver.restore(sess, pretrain_file)
     if pretrain != Runmode.skip:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         # First, use the oracle model to provide the positive examples, which are sampled from the oracle data distribution
         generate_samples(sess, target_lstm, BATCH_SIZE, generated_num, positive_file)
         gen_data_loader.create_batches(positive_file)
@@ -159,7 +159,7 @@ def main():
             saver.save(sess, pretrain_file)
             writer.add_scalar('Loss/pre_discrim_loss', sess.run(discriminator.loss, feed), epoch)
     if advtrain == Runmode.con:
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         saver.restore(sess, advtrain_file)
     if advtrain != Runmode.skip:
         rollout = ROLLOUT(generator, 0.8)

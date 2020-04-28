@@ -1,0 +1,7 @@
+*~
+*.index
+*.meta
+*bak
+midi*
+__pycache__
+.ipynb_checkpoints

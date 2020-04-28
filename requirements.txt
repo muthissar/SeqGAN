@@ -1,0 +1,8 @@
+scipy==1.4.1
+tensorflow==2.2.0rc3
+music21==5.7.2
+pathos==0.2.5
+torch==1.4.0
+nltk==3.5
+numpy==1.18.1
+PyYAML==5.3.1

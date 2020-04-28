@@ -93,7 +93,7 @@ def main():
     random.seed(SEED)
     np.random.seed(SEED)
     assert START_TOKEN == 0
-    
+    tf.compat.v1.disable_eager_execution()
     if music:
         gen_data_loader = Music_Gen_Data_loader(BATCH_SIZE,SEQ_LENGTH)
         eval_data_loader = Music_Gen_Data_loader(BATCH_SIZE,SEQ_LENGTH)
@@ -123,31 +123,31 @@ def main():
         target = None 
     discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size, embedding_size=dis_embedding_dim, 
                                 filter_sizes=dis_filter_sizes, num_filters=dis_num_filters, l2_reg_lambda=dis_l2_reg_lambda)
-    saver = tf.train.Saver(max_to_keep=3)
+    saver = tf.compat.v1.train.Saver(max_to_keep=3)
 
     
     rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, pretrain_file, advtrain_file, 
         positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, save)
-    tf_config = tf.ConfigProto()
+    tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
-    sess = tf.Session(config=tf_config)
+    sess = tf.compat.v1.Session(config=tf_config)
 
     
     if pretrain == Runmode.fresh or pretrain == Runmode.skip:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
     if pretrain == Runmode.con:
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         saver.restore(sess, pretrain_file)
     if pretrain != Runmode.skip:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.compat.v1.global_variables_initializer())
         gan_trainer.pretrain(sess, PRE_GEN_EPOCH, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
             saver,dis_dropout_keep_prob,generated_num)
         # First, use the oracle model to provide the positive examples, which are sampled from the oracle data distribution
         # generate_samples(sess, target_lstm, BATCH_SIZE, generated_num, positive_file)
     if advtrain == Runmode.con:
-        tf.reset_default_graph()
+        tf.compat.v1.reset_default_graph()
         saver.restore(sess, advtrain_file)
     if advtrain != Runmode.skip:
         gan_trainer.advtrain(sess, saver, TOTAL_BATCH, BATCH_SIZE, epochs_generator, epochs_discriminator,
