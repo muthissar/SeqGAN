@@ -1,31 +1,60 @@
 import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
+import tensorflow as tf
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from pathos.multiprocessing import ProcessingPool as Pool
 import postprocessing as POST
 import math
+import os
 
 class GanTrainer:
     def __init__(self,generator,discriminator, rollout, 
-        gen_data_loader, dis_data_loader, eval_data_loader, target,pretrain_file, advtrain_file, 
-        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save):
+        gen_data_loader, dis_data_loader, eval_data_loader, target, 
+        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save, run_dir):
         self.generator = generator
         self.discriminator = discriminator
         self.rollout = rollout
-        self.log = open('save/experiment-log.txt', 'w')
+        #self.log = open('save/experiment-log.txt', 'w')
         self.gen_data_loader = gen_data_loader
         self.dis_data_loader = dis_data_loader
         self.eval_data_loader = eval_data_loader
         self.target = target
-        self.writer =  SummaryWriter()
-        self.pretrain_file = pretrain_file
-        self.advtrain_file = advtrain_file
+        writer_dir = os.path.join(run_dir, 'log')
+        os.makedirs(writer_dir, exist_ok = True)
+        #self.writer =  tf.summary.create_file_writer(writer_dir)
+        g =  tf.compat.v1.get_default_graph()
+        with g.as_default():
+            self._step = tf.Variable(0, dtype=tf.int64)
+            self._cross_p_q = tf.Variable(0, dtype=tf.float64)
+            self._cross_p_q_2 = tf.Variable(0, dtype=tf.float64)
+            self._cross_q_p = tf.Variable(0, dtype=tf.float64)
+            self.ent_p = tf.Variable(0, dtype=tf.float64)
+            self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
+            self.disc_loss = tf.Variable(0, dtype=tf.float64)
+            self.writer =  tf.summary.create_file_writer(writer_dir)
+            with self.writer.as_default():
+                tf.summary.scalar('Loss/cross_p_q', self._cross_p_q, self._step)
+                tf.summary.scalar('Loss/cross_p_q_2', self._cross_p_q_2, self._step)
+                tf.summary.scalar('Loss/cross_q_p', self._cross_q_p, self._step)
+                tf.summary.scalar('Loss/ent_p', self.ent_p, self._step)
+                tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step)
+                tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step)
+                self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
+                self.writer_flush = self.writer.flush()
+            
+        model_dir = os.path.join(run_dir, 'model')
+        os.makedirs(model_dir, exist_ok = True)
+        self.gen_dir = os.path.join(run_dir, 'gen')
+        self.pretrain_file = os.path.join(model_dir,'pretrain')
+        self.advtrain_file = os.path.join(model_dir,'advtrain')
         self.positive_file = positive_file
         self.negative_file = negative_file
         self.BATCH_SIZE = BATCH_SIZE
         self.START_TOKEN = START_TOKEN
         self.music = music
         self.save = save
+    def init(self,sess):
+        sess.run(self.writer.init())
         
     def pre_train_epoch(self, sess, trainable_model, data_loader):
         # Pre-train the generator using MLE for one epoch
@@ -58,7 +87,7 @@ class GanTrainer:
             # predict from the batch
             # TODO: which start tokens?
             #start_tokens = batch[:, 0]
-            start_tokens = np.array([self.START_TOKEN] * self.BATCH_SIZE, dtype=np.int64)
+            start_tokens = np.array([self.START_TOKEN] * self.BATCH_SIZE, dtype=np.float64)
             prediction = trainable_model.predict(sess, batch, start_tokens)
             # argmax to convert to vocab
             #prediction = np.argmax(prediction, axis=2)
@@ -119,28 +148,45 @@ class GanTrainer:
         cross_q_p = self.cross_q_p(sess)
         ent_p = sess.run(self.generator.pretrain_loss,
             {self.generator.x: self.generator.generate(sess)})
-        self.writer.add_scalar('Loss/cross_p_q', cross_p_q, epoch)
-        self.writer.add_scalar('Loss/cross_p_q_2', cross_p_q_2, epoch)
-        self.writer.add_scalar('Loss/cross_q_p', cross_q_p, epoch)
-        self.writer.add_scalar('Loss/ent_p', ent_p, epoch)
+        sess.run(self.all_summary_ops)
+        sess.run([self._step.assign(epoch)])
+        sess.run([self._cross_p_q.assign(cross_p_q),
+            self._cross_p_q_2.assign(cross_p_q_2),
+            self._cross_q_p.assign(cross_q_p),
+            self.ent_p.assign(ent_p)
+        ])
+        sess.run(self.writer_flush)
+            
+        
+            
+        #sess.run(self.writer_flush)
         # measure bleu score with the validation set
         #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
-        print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
-            epoch,
-            cross_p_q,
-            cross_p_q_2,
-            cross_q_p,
-            ent_p
-        ))
+        if epoch % 5 == 0:
+            print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
+                epoch,
+                cross_p_q,
+                cross_p_q_2,
+                cross_q_p,
+                ent_p
+            ))
+
         
     def log_gen_adv(self, sess, g_loss, epoch):
-        self.writer.add_scalar('Loss/rein_max_ent', g_loss, epoch)
-        print('epoch: {}, rein_max_ent_loss: {}'.format(
-            epoch,
-            g_loss
-        ))
+        sess.run(self.all_summary_ops)
+        sess.run([self._step.assign(epoch)])
+        sess.run([self.rein_max_ent.assign(g_loss)])
+        sess.run(self.writer_flush)
+        if epoch % 5 == 0:
+            print('epoch: {}, rein_max_ent_loss: {}'.format(
+                epoch,
+                g_loss
+            ))
     def log_disc(self, sess, epoch, disc_loss):
-        self.writer.add_scalar('Loss/discrim_loss', disc_loss, epoch)
+        sess.run(self.all_summary_ops)
+        sess.run([self._step.assign(epoch)])
+        sess.run([self.disc_loss.assign(disc_loss)])
+        sess.run(self.writer_flush)
         print("epoch: {}, discrim_loss: {}.".format(
             epoch,
             disc_loss
@@ -150,15 +196,15 @@ class GanTrainer:
         #TODO: not right loss as it's not taking into account the 
         #for i in range(10):
         #    predictions = np.concatenate((predictions,sess.run(self.discriminator.ypred_for_auc, {self.discriminator.input_x: self.generator.generate(sess), self.discriminator.dropout_keep_prob: dis_dropout_keep_prob})[:,class_]))
-        #self.writer.add_scalar('Loss/discrim_loss', disc_loss, total_batch)
+        #tf.summary.scalar('Loss/discrim_loss', disc_loss, total_batch)
         #print("discrim  --  min: {}, max: {}, ll: {}, loss: {}".format(min(predictions),max(predictions),,disc_loss))
 
     def pretrain_generator(self,sess,PRE_GEN_EPOCH,saver,generated_num):
         self.gen_data_loader.create_batches(self.positive_file)
         for epoch in range(PRE_GEN_EPOCH):
             cross_p_q_2 = self.pre_train_epoch(sess, self.generator, self.gen_data_loader)
+            self.log_gen(sess, epoch, cross_p_q_2)
             if epoch % 5 == 0:
-                self.log_gen(sess, epoch, cross_p_q_2)
                 if self.save:
                     saver.save(sess, self.pretrain_file)
                 # generate 5 test samples per epoch
@@ -167,10 +213,10 @@ class GanTrainer:
                 if self.music:
                     if epoch == 0:
                         self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        POST.main(self.negative_file, 5, str(-1)+'_vanilla_', 'midi')
+                        POST.main(self.negative_file, 5,  self.gen_dir + str(-1)+'_vanilla_', 'midi')
                     elif epoch == PRE_GEN_EPOCH - 1:
                         self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        POST.main(self.negative_file, 5, str(-PRE_GEN_EPOCH)+'_vanilla_', 'midi')
+                        POST.main(self.negative_file, 5, self.gen_dir + str(-PRE_GEN_EPOCH)+'_vanilla_', 'midi')
 
 
     def pretrain_discrim(self, sess, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
@@ -198,7 +244,7 @@ class GanTrainer:
         saver,dis_dropout_keep_prob,generated_num):
         #  pre-train generator
         print('Start pre-training...')
-        self.log.write('pre-training...\n')
+        #self.log.write('pre-training...\n')
         self.pretrain_generator(sess,PRE_GEN_EPOCH,saver,generated_num)
         self.pretrain_discrim(sess, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
         saver,dis_dropout_keep_prob,generated_num)
@@ -207,14 +253,14 @@ class GanTrainer:
         DIS_EPOCHS_PR_BATCH,rollout_num,generated_num, dis_dropout_keep_prob,ent_temp):
         print('#########################################################################')
         print('Start Adversarial Training...')
-        self.log.write('adversarial training...\n')
+        #self.log.write('adversarial training...\n')
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
             g_loss = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
             # Test
-            if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-                self.log_gen(sess, total_batch, self.cross_p_q_2(sess))
-                self.log_gen_adv(sess, g_loss, total_batch)
+            #if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+            self.log_gen(sess, total_batch, self.cross_p_q_2(sess))
+            self.log_gen_adv(sess, g_loss, total_batch)
 
             disc_loss = self.advtrain_disc(sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
                 BATCH_SIZE, generated_num, self.positive_file, self.negative_file, dis_dropout_keep_prob)
@@ -229,7 +275,7 @@ class GanTrainer:
             if self.music:
                 # generate random test samples and postprocess the sequence to midi file
                 self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
-                POST.main(self.negative_file, 5, str(total_batch)+'_vanilla_', 'midi')
+                POST.main(self.negative_file, 5, self.gen_dir + str(total_batch)+'_vanilla_', 'midi')
                 
                 #print("disc_loss: {}".format(disc_loss))
                 #print("trained disc --- %s seconds ---" % (time.time() - start_time))
