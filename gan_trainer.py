@@ -14,33 +14,12 @@ class GanTrainer:
         self.generator = generator
         self.discriminator = discriminator
         self.rollout = rollout
-        #self.log = open('save/experiment-log.txt', 'w')
         self.gen_data_loader = gen_data_loader
         self.dis_data_loader = dis_data_loader
         self.eval_data_loader = eval_data_loader
         self.target = target
-        writer_dir = os.path.join(run_dir, 'log')
-        os.makedirs(writer_dir, exist_ok = True)
-        #self.writer =  tf.summary.create_file_writer(writer_dir)
-        g =  tf.compat.v1.get_default_graph()
-        with g.as_default():
-            self._step = tf.Variable(0, dtype=tf.int64)
-            self._cross_p_q = tf.Variable(0, dtype=tf.float64)
-            self._cross_p_q_2 = tf.Variable(0, dtype=tf.float64)
-            self._cross_q_p = tf.Variable(0, dtype=tf.float64)
-            self.ent_p = tf.Variable(0, dtype=tf.float64)
-            self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
-            self.disc_loss = tf.Variable(0, dtype=tf.float64)
-            self.writer =  tf.summary.create_file_writer(writer_dir)
-            with self.writer.as_default():
-                tf.summary.scalar('Loss/cross_p_q', self._cross_p_q, self._step)
-                tf.summary.scalar('Loss/cross_p_q_2', self._cross_p_q_2, self._step)
-                tf.summary.scalar('Loss/cross_q_p', self._cross_q_p, self._step)
-                tf.summary.scalar('Loss/ent_p', self.ent_p, self._step)
-                tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step)
-                tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step)
-                self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
-                self.writer_flush = self.writer.flush()
+        self.run_dir = run_dir
+        self.define_log()
             
         model_dir = os.path.join(run_dir, 'model')
         os.makedirs(model_dir, exist_ok = True)
@@ -53,6 +32,36 @@ class GanTrainer:
         self.START_TOKEN = START_TOKEN
         self.music = music
         self.save = save
+    def define_log(self):
+        writer_dir = os.path.join(self.run_dir, 'log')
+        os.makedirs(writer_dir, exist_ok = True)
+        g =  tf.compat.v1.get_default_graph()
+        with g.as_default():
+            self._step_gen = tf.Variable(0, dtype=tf.int64)
+            self._step_disc = tf.Variable(0, dtype=tf.int64)
+            self._cross_p_q = tf.Variable(0, dtype=tf.float64)
+            self._cross_p_q_2 = tf.Variable(0, dtype=tf.float64)
+            self._cross_q_p = tf.Variable(0, dtype=tf.float64)
+            self.ent_p = tf.Variable(0, dtype=tf.float64)
+            self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
+            self.disc_loss = tf.Variable(0, dtype=tf.float64)
+            self.writer =  tf.summary.create_file_writer(writer_dir)
+            with self.writer.as_default():
+                #pretraining logs
+                #tf.summary.scalar('Loss/pre/cross_p_q', self._cross_p_q_pre, self._step_gen)
+                #tf.summary.scalar('Loss/pre/cross_p_q_2', self._cross_p_q_2_pre, self._step_gen)
+                #tf.summary.scalar('Loss/pre/cross_q_p', self._cross_q_p_pre, self._step_gen)
+                #tf.summary.scalar('Loss/pre/ent_p', self.ent_p_pre, self._step_gen)
+                #tf.summary.scalar('Loss/pre/discrim_loss', self.disc_loss_pre, self._step_disc)
+                #adv trainging logs
+                tf.summary.scalar('Loss/cross_p_q', self._cross_p_q, self._step_gen)
+                tf.summary.scalar('Loss/cross_p_q_2', self._cross_p_q_2, self._step_gen)
+                tf.summary.scalar('Loss/cross_q_p', self._cross_q_p, self._step_gen)
+                tf.summary.scalar('Loss/ent_p', self.ent_p, self._step_gen)
+                tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step_disc)
+                tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step_gen)
+                self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
+                self.writer_flush = self.writer.flush()
     def init(self,sess):
         sess.run(self.writer.init())
         
@@ -143,17 +152,19 @@ class GanTrainer:
             self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
         return test_loss
     
-    def log_gen(self, sess, epoch, cross_p_q_2):
+    def log_gen(self, sess, epoch, cross_p_q_2,g_loss=0):
         cross_p_q = self.cross_p_q(sess)
         cross_q_p = self.cross_q_p(sess)
         ent_p = sess.run(self.generator.pretrain_loss,
             {self.generator.x: self.generator.generate(sess)})
         sess.run(self.all_summary_ops)
-        sess.run([self._step.assign(epoch)])
+        #sess.run([self._step_gen.assign(epoch)])
+        sess.run([self._step_gen.assign_add(1)])
         sess.run([self._cross_p_q.assign(cross_p_q),
             self._cross_p_q_2.assign(cross_p_q_2),
             self._cross_q_p.assign(cross_q_p),
-            self.ent_p.assign(ent_p)
+            self.ent_p.assign(ent_p),
+            self.rein_max_ent.assign(g_loss)
         ])
         sess.run(self.writer_flush)
             
@@ -168,23 +179,24 @@ class GanTrainer:
                 cross_p_q,
                 cross_p_q_2,
                 cross_q_p,
-                ent_p
+                ent_p,
+                g_loss
             ))
 
         
-    def log_gen_adv(self, sess, g_loss, epoch):
-        sess.run(self.all_summary_ops)
-        sess.run([self._step.assign(epoch)])
-        sess.run([self.rein_max_ent.assign(g_loss)])
-        sess.run(self.writer_flush)
-        if epoch % 5 == 0:
-            print('epoch: {}, rein_max_ent_loss: {}'.format(
-                epoch,
-                g_loss
-            ))
+    #def log_gen_adv(self, sess, g_loss, epoch):
+    #    sess.run(self.all_summary_ops)
+    #    sess.run([self._step_gen.assign(epoch)])
+    #    sess.run([self.rein_max_ent.assign(g_loss)])
+    #    sess.run(self.writer_flush)
+    #    if epoch % 5 == 0:
+    #        print('epoch: {}, rein_max_ent_loss: {}'.format(
+    #            epoch,
+    #            g_loss
+    #        ))
     def log_disc(self, sess, epoch, disc_loss):
         sess.run(self.all_summary_ops)
-        sess.run([self._step.assign(epoch)])
+        sess.run([self._step_disc.assign_add(1)])
         sess.run([self.disc_loss.assign(disc_loss)])
         sess.run(self.writer_flush)
         print("epoch: {}, discrim_loss: {}.".format(
@@ -213,10 +225,12 @@ class GanTrainer:
                 if self.music:
                     if epoch == 0:
                         self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        POST.main(self.negative_file, 5,  self.gen_dir + str(-1)+'_vanilla_', 'midi')
+                        #POST.main(self.negative_file, 5,  epoch, self.gen_dir + +str(-1)+'_vanilla_')
+                        #POST.main(self.negative_file, 5,  epoch, self.gen_dir)
                     elif epoch == PRE_GEN_EPOCH - 1:
                         self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        POST.main(self.negative_file, 5, self.gen_dir + str(-PRE_GEN_EPOCH)+'_vanilla_', 'midi')
+                        #POST.main(self.negative_file, 5, epoch, self.gen_dir + str(-PRE_GEN_EPOCH)+'_vanilla_')
+                        #POST.main(self.negative_file, 5, epoch, self.gen_dir)
 
 
     def pretrain_discrim(self, sess, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
@@ -259,8 +273,8 @@ class GanTrainer:
             g_loss = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
             # Test
             #if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
-            self.log_gen(sess, total_batch, self.cross_p_q_2(sess))
-            self.log_gen_adv(sess, g_loss, total_batch)
+            self.log_gen(sess, total_batch, self.cross_p_q_2(sess), g_loss)
+            #self.log_gen_adv(sess, g_loss, total_batch)
 
             disc_loss = self.advtrain_disc(sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
                 BATCH_SIZE, generated_num, self.positive_file, self.negative_file, dis_dropout_keep_prob)
@@ -275,7 +289,8 @@ class GanTrainer:
             if self.music:
                 # generate random test samples and postprocess the sequence to midi file
                 self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
-                POST.main(self.negative_file, 5, self.gen_dir + str(total_batch)+'_vanilla_', 'midi')
+                #POST.main(self.negative_file, 5, total_batch, self.gen_dir + str(total_batch)+'_vanilla_')
+                #POST.main(self.negative_file, 5, total_batch, self.gen_dir)
                 
                 #print("disc_loss: {}".format(disc_loss))
                 #print("trained disc --- %s seconds ---" % (time.time() - start_time))

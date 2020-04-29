@@ -41,7 +41,7 @@ def main():
     config_file = args.config
     with open(config_file) as stream:
         try:
-            config = yaml.load(stream)
+            config = yaml.load(stream, Loader=yaml.Loader)
         except yaml.YAMLError as exc:
             print(exc)
     #########################################################################################
@@ -86,7 +86,7 @@ def main():
     run_dir = os.path.join('runs', model_number, current_time)
     save_dir = os.path.join(run_dir,'save')
     os.makedirs(save_dir,exist_ok=True)
-    copyfile(src = config_file, dst = os.path.join(run_dir,'config.json'))
+    copyfile(src = config_file, dst = os.path.join(run_dir,'config.yaml'))
     
     # positive data, containing real music sequences
     positive_file = config['positive_file']
@@ -107,8 +107,9 @@ def main():
     ent_temp = config['ent_temp']
     music = config['is_music_data']
     target_class = config['target_class'] if 'target_class' in config else False 
-    save = config['save_model']
+    number_model_save = config['number_model_save']
     normalize_rewards = config['rewards_normalize']
+    
     
     random.seed(SEED)
     np.random.seed(SEED)
@@ -149,7 +150,7 @@ def main():
     rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
-        positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, save, run_dir)
+        positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, number_model_save, run_dir)
     tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
     sess = tf.compat.v1.Session(config=tf_config, graph=tf.compat.v1.get_default_graph())

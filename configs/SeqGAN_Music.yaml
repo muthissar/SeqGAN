@@ -53,7 +53,7 @@ pretrain : True
 infinite_loop: True
 # our dataset achives around 0.53 from pretraining
 loop_threshold: 0.5
-runmode_pretrain: 'skip'
+runmode_pretrain: 'fresh'
 pretrain_file: 'model/pretrain_max_ent_music.ckpt'
 runmode_advtrain: 'fresh'
 advtrain_file: 'model/advtrain_max_ent_music.ckpt'
@@ -63,5 +63,5 @@ ent_temp: 1
 
 is_music_data: True
 
-save_model: False
+number_model_save: 1
 rewards_normalize: True
