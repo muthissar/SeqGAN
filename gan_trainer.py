@@ -6,11 +6,14 @@ from pathos.multiprocessing import ProcessingPool as Pool
 import postprocessing as POST
 import math
 import os
+import time
+
+
 
 class GanTrainer:
     def __init__(self,generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
-        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save, run_dir):
+        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save, run_dir,log_time=True):
         self.generator = generator
         self.discriminator = discriminator
         self.rollout = rollout
@@ -31,6 +34,7 @@ class GanTrainer:
         self.START_TOKEN = START_TOKEN
         self.music = music
         self.save = save
+        self.log_time = True
     def define_log(self):
         writer_dir = os.path.join(self.run_dir, 'log')
         os.makedirs(writer_dir, exist_ok = True)
@@ -270,15 +274,29 @@ class GanTrainer:
         #self.log.write('adversarial training...\n')
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
+            t1  = time.time()
             g_loss = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
+            t2  = time.time()
+            print('Time g_train: {}'.format(t2-t1))
+            t2 = t1
             # Test
             #if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
+            t1  = time.time()
             self.log_gen(sess, total_batch, self.cross_p_q_2(sess), g_loss)
-            #self.log_gen_adv(sess, g_loss, total_batch)
-
+            t2  = time.time()
+            print('Time log_gen: {}'.format(t2-t1))
+            t2 = t1
+            t1  = time.time()
             disc_loss = self.advtrain_disc(sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
                 BATCH_SIZE, generated_num, self.positive_file, self.negative_file, dis_dropout_keep_prob)
+            t2  = time.time()
+            print('Time d_train: {}'.format(t2-t1))
+            t2 = t1
+            t1  = time.time()
             self.log_disc(sess, total_batch, disc_loss)
+            t2  = time.time()
+            print('Time log_disc: {}'.format(t2-t1))
+            t2 = t1
             #if True: #config['infinite_loop']:
             #    if bleu_score < 0.5: #config['loop_threshold']:
             #        buffer = 'Mode collapse detected, restarting from pretrained model...'
@@ -288,7 +306,7 @@ class GanTrainer:
             #        #load_checkpoint(sess, saver)
             if self.music:
                 # generate random test samples and postprocess the sequence to midi file
-                self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
+                #self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
                 #POST.main(self.negative_file, 5, total_batch, self.gen_dir + str(total_batch)+'_vanilla_')
                 #POST.main(self.negative_file, 5, total_batch, self.gen_dir)
                 
