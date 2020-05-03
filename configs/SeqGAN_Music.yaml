@@ -8,11 +8,11 @@ HIDDEN_DIM : 512 # hidden state dimension of lstm cell
 SEQ_LENGTH : 100 # sequence length
 START_TOKEN : 0
 
-PRE_GEN_EPOCH : 100 # supervise (maximum likelihood estimation) epochs for generator (default: 120)
+PRE_GEN_EPOCH : 0 # supervise (maximum likelihood estimation) epochs for generator (default: 120)
 PRE_DIS_EPOCH : 100 # supervise (maximum likelihood estimation) epochs for discriminator (default: 50)
 SEED : 88
 BATCH_SIZE : 32
-generator_lr : 0.001
+generator_lr : 0.0001
 ROLLOUT_UPDATE_RATE: 0.9
 reward_gamma: 0.99
 # use x10 learning rate for adversarial training: mainly for slow & accurate pretraining & more weighted adv training
@@ -53,13 +53,13 @@ pretrain : True
 infinite_loop: True
 # our dataset achives around 0.53 from pretraining
 loop_threshold: 0.5
-runmode_pretrain: 'fresh'
-pretrain_file: 'model/pretrain_max_ent_music.ckpt'
+runmode_pretrain: 'con'
+pretrain_file: "runs/49b1df8786702568d88efc00e30cec550e9ec40a-dirty/20200503-174843/model/pretrain"
 runmode_advtrain: 'fresh'
 advtrain_file: 'model/advtrain_max_ent_music.ckpt'
 #Entropy temperature (controls how much entropy affects the reward)
 #1 is normal 2 is halfed 
-ent_temp: 1
+ent_temp: 1000000
 
 is_music_data: True
 

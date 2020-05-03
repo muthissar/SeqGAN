@@ -119,4 +119,7 @@ def main(DATA, num_sample, epoch, midi_path):
 
 
 if __name__ == "__main__":
-    main('./dataset/train',1,1, 'midi')
+    import os
+    dir_ = './runs/49b1df8786702568d88efc00e30cec550e9ec40a-dirty/20200503-174843/'
+    os.makedirs(dir_ + '/midi')
+    main(dir_+'/save/generator_sample.txt',1,1, dir_ + '/midi')

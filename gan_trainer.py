@@ -20,7 +20,6 @@ class GanTrainer:
         self.target = target
         self.run_dir = run_dir
         self.define_log()
-            
         model_dir = os.path.join(run_dir, 'model')
         os.makedirs(model_dir, exist_ok = True)
         self.gen_dir = os.path.join(run_dir, 'gen')
@@ -37,31 +36,32 @@ class GanTrainer:
         os.makedirs(writer_dir, exist_ok = True)
         g =  tf.compat.v1.get_default_graph()
         with g.as_default():
-            self._step_gen = tf.Variable(0, dtype=tf.int64)
-            self._step_disc = tf.Variable(0, dtype=tf.int64)
-            self._cross_p_q = tf.Variable(0, dtype=tf.float64)
-            self._cross_p_q_2 = tf.Variable(0, dtype=tf.float64)
-            self._cross_q_p = tf.Variable(0, dtype=tf.float64)
-            self.ent_p = tf.Variable(0, dtype=tf.float64)
-            self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
-            self.disc_loss = tf.Variable(0, dtype=tf.float64)
-            self.writer =  tf.summary.create_file_writer(writer_dir)
-            with self.writer.as_default():
-                #pretraining logs
-                #tf.summary.scalar('Loss/pre/cross_p_q', self._cross_p_q_pre, self._step_gen)
-                #tf.summary.scalar('Loss/pre/cross_p_q_2', self._cross_p_q_2_pre, self._step_gen)
-                #tf.summary.scalar('Loss/pre/cross_q_p', self._cross_q_p_pre, self._step_gen)
-                #tf.summary.scalar('Loss/pre/ent_p', self.ent_p_pre, self._step_gen)
-                #tf.summary.scalar('Loss/pre/discrim_loss', self.disc_loss_pre, self._step_disc)
-                #adv trainging logs
-                tf.summary.scalar('Loss/cross_p_q', self._cross_p_q, self._step_gen)
-                tf.summary.scalar('Loss/cross_p_q_2', self._cross_p_q_2, self._step_gen)
-                tf.summary.scalar('Loss/cross_q_p', self._cross_q_p, self._step_gen)
-                tf.summary.scalar('Loss/ent_p', self.ent_p, self._step_gen)
-                tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step_disc)
-                tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step_gen)
-                self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
-                self.writer_flush = self.writer.flush()
+            with tf.compat.v1.variable_scope('gan_trainer'):
+                self._step_gen = tf.Variable(0, dtype=tf.int64)
+                self._step_disc = tf.Variable(0, dtype=tf.int64)
+                self._cross_p_q = tf.Variable(0, dtype=tf.float64)
+                self._cross_p_q_2 = tf.Variable(0, dtype=tf.float64)
+                self._cross_q_p = tf.Variable(0, dtype=tf.float64)
+                self.ent_p = tf.Variable(0, dtype=tf.float64)
+                self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
+                self.disc_loss = tf.Variable(0, dtype=tf.float64)
+                self.writer =  tf.summary.create_file_writer(writer_dir)
+                with self.writer.as_default():
+                    #pretraining logs
+                    #tf.summary.scalar('Loss/pre/cross_p_q', self._cross_p_q_pre, self._step_gen)
+                    #tf.summary.scalar('Loss/pre/cross_p_q_2', self._cross_p_q_2_pre, self._step_gen)
+                    #tf.summary.scalar('Loss/pre/cross_q_p', self._cross_q_p_pre, self._step_gen)
+                    #tf.summary.scalar('Loss/pre/ent_p', self.ent_p_pre, self._step_gen)
+                    #tf.summary.scalar('Loss/pre/discrim_loss', self.disc_loss_pre, self._step_disc)
+                    #adv trainging logs
+                    tf.summary.scalar('Loss/cross_p_q', self._cross_p_q, self._step_gen)
+                    tf.summary.scalar('Loss/cross_p_q_2', self._cross_p_q_2, self._step_gen)
+                    tf.summary.scalar('Loss/cross_q_p', self._cross_q_p, self._step_gen)
+                    tf.summary.scalar('Loss/ent_p', self.ent_p, self._step_gen)
+                    tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step_disc)
+                    tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step_gen)
+                    self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
+                    self.writer_flush = self.writer.flush()
     def init(self,sess):
         sess.run(self.writer.init())
         
@@ -174,7 +174,7 @@ class GanTrainer:
         # measure bleu score with the validation set
         #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
         if epoch % 5 == 0:
-            print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}'.format(
+            print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}, g_loss{}'.format(
                 epoch,
                 cross_p_q,
                 cross_p_q_2,

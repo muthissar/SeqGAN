@@ -23,9 +23,10 @@ import argparse
 from shutil import copyfile
 
 class Runmode(Enum):
-    fresh = 1
-    con = 2
-    skip = 3
+    fresh = 1 #run from scratch
+    con = 2 # continue pretraining from cache 
+    skip = 3 #  skip the pretraining step
+    cache = 4 # load pretraining cache and skip pretraining
 
 
 
@@ -36,7 +37,6 @@ def main():
     description='''Run's the SeqGan algorithm using Maximum Entropy Reinforcement Learning.''',
     epilog="""All's well that ends well.""")
     parser.add_argument('--config', type=str, default="", help='JSON config file',required=True)
-    #parser.add_argument('bar', nargs='*', default=[1, 2, 3], help='BAR!')
     args = parser.parse_args()
     config_file = args.config
     with open(config_file) as stream:
@@ -107,7 +107,7 @@ def main():
     ent_temp = config['ent_temp']
     music = config['is_music_data']
     target_class = config['target_class'] if 'target_class' in config else False 
-    number_model_save = config['number_model_save']
+    number_model_save = int(config['number_model_save'])
     normalize_rewards = config['rewards_normalize']
     
     
@@ -144,28 +144,28 @@ def main():
         target = None 
     discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size, embedding_size=dis_embedding_dim, 
                                 filter_sizes=dis_filter_sizes, num_filters=dis_num_filters, l2_reg_lambda=dis_l2_reg_lambda)
-    saver = tf.compat.v1.train.Saver(max_to_keep=3)
-
+    
     
     rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
+    print("Logging in: {}".format(run_dir))
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
         positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, number_model_save, run_dir)
     tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
-    sess = tf.compat.v1.Session(config=tf_config, graph=tf.compat.v1.get_default_graph())
-    
-    
+    saver = tf.compat.v1.train.Saver(max_to_keep=number_model_save)
+    sess = tf.compat.v1.Session(config=tf_config)
+    gan_trainer.init(sess)
+    # Run from scratch
     if pretrain == Runmode.fresh or pretrain == Runmode.skip:
         sess.run(tf.compat.v1.global_variables_initializer())
-        gan_trainer.init(sess)
-    if pretrain == Runmode.con:
-        tf.compat.v1.reset_default_graph()
+    # Load cache
+    elif pretrain == Runmode.con or pretrain == Runmode.cache:
+        #tf.compat.v1.reset_default_graph()
         saver.restore(sess, pretrain_cache_file)
-        gan_trainer.init(sess)
-    if pretrain != Runmode.skip:
-        sess.run(tf.compat.v1.global_variables_initializer())
-        gan_trainer.init(sess)
+        #gan_trainer.init(sess)
+    # Run the pretraining
+    if pretrain != Runmode.skip or pretrain != Runmode.cache:
         gan_trainer.pretrain(sess, PRE_GEN_EPOCH, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
             saver,dis_dropout_keep_prob,generated_num)
         # First, use the oracle model to provide the positive examples, which are sampled from the oracle data distribution

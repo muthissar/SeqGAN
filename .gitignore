@@ -6,3 +6,6 @@ midi*
 __pycache__
 .ipynb_checkpoints
 runs
+dataset
+save/eval_file*
+save/real_data*
