@@ -29,16 +29,7 @@ class Runmode(Enum):
     cache = 4 # load pretraining cache and skip pretraining
 
 
-
-
-
-def main():
-    parser=argparse.ArgumentParser(
-    description='''Run's the SeqGan algorithm using Maximum Entropy Reinforcement Learning.''',
-    epilog="""All's well that ends well.""")
-    parser.add_argument('--config', type=str, default="", help='JSON config file',required=True)
-    args = parser.parse_args()
-    config_file = args.config
+def init(config_file):
     with open(config_file) as stream:
         try:
             config = yaml.load(stream, Loader=yaml.Loader)
@@ -51,32 +42,29 @@ def main():
     HIDDEN_DIM = config['HIDDEN_DIM'] # hidden state dimension of lstm cell
     SEQ_LENGTH = config['SEQ_LENGTH'] # sequence length
     START_TOKEN = config['START_TOKEN']
-    PRE_GEN_EPOCH = config['PRE_GEN_EPOCH'] # supervise (maximum likelihood estimation) epochs for generator
-    PRE_DIS_EPOCH = config['PRE_DIS_EPOCH'] # supervise (maximum likelihood estimation) epochs for discriminator
     SEED = config['SEED']
     BATCH_SIZE = config['BATCH_SIZE']
     ROLLOUT_UPDATE_RATE = config['ROLLOUT_UPDATE_RATE']
     GENERATOR_LR = config['generator_lr']
-    REWARD_GAMMA = config['reward_gamma']
-    rollout_num = config['rollout_num']
+    normalize_rewards = config['rewards_normalize']
+    random.seed(SEED)
+    np.random.seed(SEED)
     #########################################################################################
     #  Discriminator  Hyper-parameters
     #########################################################################################
     dis_embedding_dim = config['dis_embedding_dim']
     dis_filter_sizes = config['dis_filter_sizes']
     dis_num_filters = config['dis_num_filters']
-    dis_dropout_keep_prob = config['dis_dropout_keep_prob']
     dis_l2_reg_lambda = config['dis_l2_reg_lambda']
-    dis_batch_size = config['dis_batch_size']
-    DIS_EPOCHS_PR_BATCH = config['epochs_discriminator_multiplier']
+
     #########################################################################################
     #  Basic Training Parameters
     #########################################################################################
-    TOTAL_BATCH = config['TOTAL_BATCH']
     # vocab size for our custom data
     vocab_size = config['vocab_size']
+    number_model_save = int(config['number_model_save'])
     
-    
+    #os.environ["CUDA_VISIBLE_DEVICES"]=config['GPU']
     repo = git.Repo(search_parent_directories=True)
     model_number = repo.head.object.hexsha
     if repo.is_dirty():
@@ -84,37 +72,22 @@ def main():
         model_number += '-dirty'
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = os.path.join('runs', model_number, current_time)
+    print("Logging in: {}".format(run_dir))
     save_dir = os.path.join(run_dir,'save')
     os.makedirs(save_dir,exist_ok=True)
     copyfile(src = config_file, dst = os.path.join(run_dir,'config.yaml'))
     
     # positive data, containing real music sequences
     positive_file = config['positive_file']
-    #positive_file = os.path.join(save_dir, 'real_data.txt')
     # negative data from the generator, containing fake sequences
-    #negative_file = config['negative_file']
     negative_file = os.path.join(save_dir, 'generator_sample.txt')
     valid_file = config['valid_file']
-    #valid_file = os.path.join(save_dir, 'eval_file.txt')
-    generated_num = config['generated_num']
-
-    epochs_generator = config['epochs_generator']
-    epochs_discriminator = config['epochs_discriminator']
-    pretrain = Runmode[config['runmode_pretrain']] #Enum('Runmode', config['runmode_pretrain'], module=__name__)
-    advtrain = Runmode[config['runmode_advtrain']]
-    pretrain_cache_file = config['pretrain_file']
-    advtrain_cache_file = config['advtrain_file']
-    ent_temp = config['ent_temp']
-    music = config['is_music_data']
-    target_class = config['target_class'] if 'target_class' in config else False 
-    number_model_save = int(config['number_model_save'])
-    normalize_rewards = config['rewards_normalize']
-    
-    
-    random.seed(SEED)
-    np.random.seed(SEED)
+        
     assert START_TOKEN == 0
     tf.compat.v1.disable_eager_execution()
+
+    music = config['is_music_data']
+    target_class = config['target_class'] if 'target_class' in config else False 
     if music:
         gen_data_loader = Music_Gen_Data_loader(BATCH_SIZE,SEQ_LENGTH)
         eval_data_loader = Music_Gen_Data_loader(BATCH_SIZE,SEQ_LENGTH)
@@ -147,12 +120,44 @@ def main():
     
     
     rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
-    print("Logging in: {}".format(run_dir))
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
         positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, number_model_save, run_dir)
+
+    return gan_trainer, config
+
+def main():
+    parser=argparse.ArgumentParser(
+    description='''Run's the SeqGan algorithm using Maximum Entropy Reinforcement Learning.''',
+    epilog="""All's well that ends well.""")
+    parser.add_argument('--config', type=str, default="", help='JSON config file',required=True)
+    args = parser.parse_args()
+    config_file = args.config
+
+    gan_trainer, config = init(config_file)
+    
+    PRE_GEN_EPOCH = config['PRE_GEN_EPOCH'] # supervise (maximum likelihood estimation) epochs for generator
+    PRE_DIS_EPOCH = config['PRE_DIS_EPOCH'] # supervise (maximum likelihood estimation) epochs for discriminator
+    REWARD_GAMMA = config['reward_gamma']
+    rollout_num = config['rollout_num']
+    dis_dropout_keep_prob = config['dis_dropout_keep_prob']
+    dis_batch_size = config['dis_batch_size']
+    DIS_EPOCHS_PR_BATCH = config['epochs_discriminator_multiplier']
+    TOTAL_BATCH = config['TOTAL_BATCH']
+    generated_num = config['generated_num']
+    BATCH_SIZE = config['BATCH_SIZE']
+
+    epochs_generator = config['epochs_generator']
+    epochs_discriminator = config['epochs_discriminator']
+    pretrain = Runmode[config['runmode_pretrain']] #Enum('Runmode', config['runmode_pretrain'], module=__name__)
+    advtrain = Runmode[config['runmode_advtrain']]
+    pretrain_cache_file = config['pretrain_file']
+    advtrain_cache_file = config['advtrain_file']
+    ent_temp = config['ent_temp']
+
     tf_config = tf.compat.v1.ConfigProto()
     tf_config.gpu_options.allow_growth = True
+    number_model_save = int(config['number_model_save'])
     saver = tf.compat.v1.train.Saver(max_to_keep=number_model_save)
     sess = tf.compat.v1.Session(config=tf_config)
     gan_trainer.init(sess)
@@ -165,7 +170,7 @@ def main():
         saver.restore(sess, pretrain_cache_file)
         #gan_trainer.init(sess)
     # Run the pretraining
-    if pretrain != Runmode.skip or pretrain != Runmode.cache:
+    if not (pretrain == Runmode.skip or pretrain == Runmode.cache):
         gan_trainer.pretrain(sess, PRE_GEN_EPOCH, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
             saver,dis_dropout_keep_prob,generated_num)
         # First, use the oracle model to provide the positive examples, which are sampled from the oracle data distribution
@@ -177,7 +182,6 @@ def main():
     if advtrain != Runmode.skip:
         gan_trainer.advtrain(sess, saver, TOTAL_BATCH, BATCH_SIZE, epochs_generator, epochs_discriminator,
             DIS_EPOCHS_PR_BATCH, rollout_num,generated_num, dis_dropout_keep_prob, ent_temp)
-    #gan_trainer.log.close()
 
 if __name__ == '__main__':
     main()

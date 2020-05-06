@@ -177,14 +177,14 @@ class GanTrainer:
         #sess.run(self.writer_flush)
         # measure bleu score with the validation set
         #bleu_score = self.calculate_bleu(sess, self.generator, self.eval_data_loader)
-        if epoch % 5 == 0:
-            print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}, g_loss{}'.format(
-                epoch,
-                cross_p_q,
-                cross_p_q_2,
-                cross_q_p,
-                ent_p,
-                g_loss
+        #if epoch % 5 == 0:
+        print('epoch: {}, cross(p,q): {}, cross_2(p,q): {}, cross(q,p): {}, ent(p): {}, g_loss: {}'.format(
+            epoch,
+            cross_p_q,
+            cross_p_q_2,
+            cross_q_p,
+            ent_p,
+            g_loss
             ))
 
         
@@ -226,15 +226,15 @@ class GanTrainer:
                 # generate 5 test samples per epoch
                 # it automatically samples from the generator and postprocess to midi file
                 # midi files are saved to the pre-defined folder
-                if self.music:
-                    if epoch == 0:
-                        self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        #POST.main(self.negative_file, 5,  epoch, self.gen_dir + +str(-1)+'_vanilla_')
-                        #POST.main(self.negative_file, 5,  epoch, self.gen_dir)
-                    elif epoch == PRE_GEN_EPOCH - 1:
-                        self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
-                        #POST.main(self.negative_file, 5, epoch, self.gen_dir + str(-PRE_GEN_EPOCH)+'_vanilla_')
-                        #POST.main(self.negative_file, 5, epoch, self.gen_dir)
+                #if self.music:
+                #    if epoch == 0:
+                #        self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
+                #        #POST.main(self.negative_file, 5,  epoch, self.gen_dir + +str(-1)+'_vanilla_')
+                #        #POST.main(self.negative_file, 5,  epoch, self.gen_dir)
+                #    elif epoch == PRE_GEN_EPOCH - 1:
+                #        self.generator.generate_samples(sess, self.BATCH_SIZE, generated_num, self.negative_file)
+                #        #POST.main(self.negative_file, 5, epoch, self.gen_dir + str(-PRE_GEN_EPOCH)+'_vanilla_')
+                #        #POST.main(self.negative_file, 5, epoch, self.gen_dir)
 
 
     def pretrain_discrim(self, sess, PRE_DIS_EPOCH,DIS_EPOCHS_PR_BATCH,
@@ -304,7 +304,7 @@ class GanTrainer:
             #        self.log.write(buffer + '\n')
             #        self.log.flush()
             #        #load_checkpoint(sess, saver)
-            if self.music:
+            #if self.music:
                 # generate random test samples and postprocess the sequence to midi file
                 #self.generator.generate_samples(sess, BATCH_SIZE, generated_num, self.negative_file)
                 #POST.main(self.negative_file, 5, total_batch, self.gen_dir + str(total_batch)+'_vanilla_')
@@ -329,9 +329,6 @@ class GanTrainer:
         # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
         # Update roll-out parameters
         self.rollout.update_params()
-        #test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
-        #print("rollout --- %s seconds ---" % (time.time() - start_time))
-        # Train the discriminator
         g_loss = sess.run(self.generator.g_loss, feed_dict=feed)
         return g_loss
 
