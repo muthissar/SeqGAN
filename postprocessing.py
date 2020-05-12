@@ -117,9 +117,43 @@ def main(DATA, num_sample, epoch, midi_path):
         all_parts.append([part_melody, part_chord])
     fp = all_parts.write('midi', './'+midi_path+'/Ep_' + str(epoch) + '_test_' + str(sample) +'.mid')
 
+def write_sample(data,path):
+    sequence = inverse_mapping(data)
+    melody, chords = split(sequence)
+
+    all_parts = stream.Stream()
+
+    # make melody stream
+    part_melody = stream.Part()
+    for token in melody:
+        # skip dummy rest
+        if token != [0, 0, 0]:
+            event = make_event(token)
+            # append event to part of melody
+            part_melody.append(event)
+
+    # make chord stream
+    part_chord = stream.Part()
+    chk_first = 1
+    offset = 0
+    for i in range(len(chords)):
+        # skip dummy rest
+        if chords[i] != [0, 0, 0]:
+            # match fist start time of chord
+            if chk_first == 1:
+                offset = part_melody[i].offset
+                chk_first = 0
+            event = make_event(chords[i])
+            # append event to part of chord
+            part_chord.append(event)
+            part_chord[-1].offset += offset
+
+
+    all_parts.append([part_melody, part_chord])
+    fp = all_parts.write('midi', path)
 
 if __name__ == "__main__":
     import os
     dir_ = './runs/49b1df8786702568d88efc00e30cec550e9ec40a-dirty/20200503-174843/'
     os.makedirs(dir_ + '/midi')
-    main(dir_+'/save/generator_sample.txt',1,1, dir_ + '/midi')
+    main('midi',dir_+'/save/generator_sample.txt',1,1, dir_ + '/midi')

@@ -77,15 +77,40 @@ class ROLLOUT(object):
 
         self.gen_x = self.gen_x.stack()  # seq_length x batch_size
         self.gen_x = tf.transpose(a=self.gen_x, perm=[1, 0])  # batch_size x seq_length
+    
+    # ordinary rollout
+    def get_reward_2(self, sess, input_x, rollout_num, discriminator, ent_temp = 1.0 ):
+        rewards = []
 
+        feed = {discriminator.input_x: input_x, discriminator.dropout_keep_prob: 1.0}
+        ypred_for_auc = sess.run(discriminator.ypred_for_auc, feed)
+        rewards = np.array([[item[1] for _ in range(self.sequence_length)] for item in ypred_for_auc])
+        
+
+        rewards = np.array(rewards) / (1.0 * rollout_num)  # batch_size x seq_length
+        #normalize batch
+        if self.normalize:
+            rewards = (rewards - np.mean(rewards, axis = 0)) / np.std(rewards, axis = 0)
+        #add entropy
+        ent = sess.run(tf.cumsum(self.lstm.lls, reverse=True),{self.lstm.x: input_x})/ent_temp
+        #normalize ent #TODO is this allowed?
+        if self.normalize:
+            ent = (ent - np.mean(ent,axis = 0))/np.std(ent,axis = 0)
+
+        rewards -= ent/ent_temp
+
+        return rewards
     def get_reward(self, sess, input_x, rollout_num, discriminator, ent_temp = 1.0):
         rewards = []
+        #TODO: this is super slow for longer sequences
         for i in range(rollout_num):
             # given_num between 1 to sequence_length - 1 for a part completed sentence
             # TODO: is this the right way to get variance mean the reward???
             # TODO: this looks not right. Is it taking as it is no taking the long term
             for given_num in range(1, self.sequence_length ):
                 feed = {self.x: input_x, self.given_num: given_num}
+                #TODO: it's weird to use the gen_x that has en extra recurrent unit, because it
+                #is not the generator, but a discounted series of the genere
                 samples = sess.run(self.gen_x, feed)
                 feed = {discriminator.input_x: samples, discriminator.dropout_keep_prob: 1.0}
                 ypred_for_auc = sess.run(discriminator.ypred_for_auc, feed)

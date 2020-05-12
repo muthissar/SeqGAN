@@ -47,6 +47,7 @@ def init(config_file):
     ROLLOUT_UPDATE_RATE = config['ROLLOUT_UPDATE_RATE']
     GENERATOR_LR = config['generator_lr']
     normalize_rewards = config['rewards_normalize']
+    rewards_reduced_variance = config['rewards_reduced_variance']
     random.seed(SEED)
     np.random.seed(SEED)
     #########################################################################################
@@ -118,11 +119,15 @@ def init(config_file):
     discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size, embedding_size=dis_embedding_dim, 
                                 filter_sizes=dis_filter_sizes, num_filters=dis_num_filters, l2_reg_lambda=dis_l2_reg_lambda)
     
-    
+    #TODO, CANNOT BE CREATED BEFORE PRETRAINING UNLESS ROLLOUT_UPDATE_RATE IS 0
+    if rewards_reduced_variance:
+        raise "Not implimented now should be moved"
     rollout = ROLLOUT(generator, ROLLOUT_UPDATE_RATE, normalize_rewards)
     gan_trainer = GanTrainer(generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
-        positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, number_model_save, run_dir)
+        positive_file, negative_file, BATCH_SIZE,START_TOKEN, music, 
+        number_model_save, run_dir,rewards_reduced_variance)
+        
 
     return gan_trainer, config
 

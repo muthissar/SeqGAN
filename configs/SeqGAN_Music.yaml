@@ -1,4 +1,4 @@
-GPU : '0' # if you have 2 GPU, use '0' or '1'
+GPU : '2' # if you have 2 GPU, use '0' or '1'
 
 #########################################################################################
 #  Generator  Hyper-parameters
@@ -8,11 +8,11 @@ HIDDEN_DIM : 512 # hidden state dimension of lstm cell
 SEQ_LENGTH : 100 # sequence length
 START_TOKEN : 0
 
-PRE_GEN_EPOCH : 0 # supervise (maximum likelihood estimation) epochs for generator (default: 120)
+PRE_GEN_EPOCH : 100 # supervise (maximum likelihood estimation) epochs for generator (default: 120)
 PRE_DIS_EPOCH : 100 # supervise (maximum likelihood estimation) epochs for discriminator (default: 50)
 SEED : 88
-BATCH_SIZE : 32
-generator_lr : 0.0001
+BATCH_SIZE : 128
+generator_lr : 0.001
 ROLLOUT_UPDATE_RATE: 0.9
 reward_gamma: 0.99
 # use x10 learning rate for adversarial training: mainly for slow & accurate pretraining & more weighted adv training
@@ -26,8 +26,8 @@ dis_num_filters : [400, 400, 400, 400, 400]
 dis_dropout_keep_prob : 0.75
 dis_l2_reg_lambda : 0.2
 dis_batch_size : 32
-rollout_num : 32
-discriminator_lr : 0.0001
+rollout_num : 128
+discriminator_lr : 0.00001
 #########################################################################################
 #  Basic Training Parameters
 #########################################################################################
@@ -53,8 +53,8 @@ pretrain : True
 infinite_loop: True
 # our dataset achives around 0.53 from pretraining
 loop_threshold: 0.5
-runmode_pretrain: 'con'
-pretrain_file: "runs/49b1df8786702568d88efc00e30cec550e9ec40a-dirty/20200503-174843/model/pretrain"
+runmode_pretrain: 'cache'
+pretrain_file: "runs/49b1df8786702568d88efc00e30cec550e9ec40a-dirty/20200503-184420/model/advtrain"
 runmode_advtrain: 'fresh'
 advtrain_file: 'model/advtrain_max_ent_music.ckpt'
 #Entropy temperature (controls how much entropy affects the reward)
@@ -65,3 +65,4 @@ is_music_data: True
 
 number_model_save: 1
 rewards_normalize: True
+rewards_reduced_variance: True

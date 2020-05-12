@@ -187,17 +187,6 @@ class GanTrainer:
             g_loss
             ))
 
-        
-    #def log_gen_adv(self, sess, g_loss, epoch):
-    #    sess.run(self.all_summary_ops)
-    #    sess.run([self._step_gen.assign(epoch)])
-    #    sess.run([self.rein_max_ent.assign(g_loss)])
-    #    sess.run(self.writer_flush)
-    #    if epoch % 5 == 0:
-    #        print('epoch: {}, rein_max_ent_loss: {}'.format(
-    #            epoch,
-    #            g_loss
-    #        ))
     def log_disc(self, sess, epoch, disc_loss):
         sess.run(self.all_summary_ops)
         sess.run([self._step_disc.assign_add(1)])
@@ -317,18 +306,24 @@ class GanTrainer:
 
     def advtrain_gen(self,sess,epochs_generator,rollout_num,ent_temp):
         # Train the generator for one step
-            
-        for it in range(epochs_generator):
-            samples = self.generator.generate(sess)
-            rewards = self.rollout.get_reward(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
-            feed = {self.generator.x: samples, self.generator.rewards: rewards}
-            _ = sess.run(self.generator.g_updates, feed_dict=feed)
-        
-
-        #print("trained adv --- %s seconds ---" % (time.time() - start_time))
-        # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
-        # Update roll-out parameters
-        self.rollout.update_params()
+        if self.rewards_reduced_variance:
+            for it in range(epochs_generator):
+                samples = self.generator.generate(sess)
+                rewards = self.rollout.get_reward(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
+                feed = {self.generator.x: samples, self.generator.rewards: rewards}
+                _ = sess.run(self.generator.g_updates, feed_dict=feed)
+            # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
+            # Update roll-out parameters
+            self.rollout.update_params()
+        else:
+            for it in range(epochs_generator):
+                samples = self.generator.generate(sess)
+                rewards = self.rollout.get_reward_2(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
+                feed = {self.generator.x: samples, self.generator.rewards: rewards}
+                _ = sess.run(self.generator.g_updates, feed_dict=feed)
+        #test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
+        #print("rollout --- %s seconds ---" % (time.time() - start_time))
+        # Train the discriminator
         g_loss = sess.run(self.generator.g_loss, feed_dict=feed)
         return g_loss
 
