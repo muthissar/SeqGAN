@@ -13,7 +13,7 @@ import time
 class GanTrainer:
     def __init__(self,generator,discriminator, rollout, 
         gen_data_loader, dis_data_loader, eval_data_loader, target, 
-        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save, run_dir,log_time=True):
+        positive_file, negative_file, BATCH_SIZE, START_TOKEN, music, save, run_dir,rewards_reduced_variance,log_time=True):
         self.generator = generator
         self.discriminator = discriminator
         self.rollout = rollout
@@ -35,6 +35,7 @@ class GanTrainer:
         self.music = music
         self.save = save
         self.log_time = True
+        self.rewards_reduced_variance = rewards_reduced_variance
     def define_log(self):
         writer_dir = os.path.join(self.run_dir, 'log')
         os.makedirs(writer_dir, exist_ok = True)
@@ -49,6 +50,7 @@ class GanTrainer:
                 self.ent_p = tf.Variable(0, dtype=tf.float64)
                 self.rein_max_ent = tf.Variable(0, dtype=tf.float64)
                 self.disc_loss = tf.Variable(0, dtype=tf.float64)
+                self.grad_len = tf.Variable(0, dtype=tf.float64)
                 self.writer =  tf.summary.create_file_writer(writer_dir)
                 with self.writer.as_default():
                     #pretraining logs
@@ -64,6 +66,7 @@ class GanTrainer:
                     tf.summary.scalar('Loss/ent_p', self.ent_p, self._step_gen)
                     tf.summary.scalar('Loss/discrim_loss', self.disc_loss, self._step_disc)
                     tf.summary.scalar('Loss/rein_max_ent', self.rein_max_ent, self._step_gen)
+                    tf.summary.scalar('grad_len', self.grad_len, self._step_gen)
                     self.all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
                     self.writer_flush = self.writer.flush()
     def init(self,sess):
@@ -156,11 +159,13 @@ class GanTrainer:
             self.target is not None else math.nan for  _ in range(int(math.ceil(n_samples/self.BATCH_SIZE)))])
         return test_loss
     
-    def log_gen(self, sess, epoch, cross_p_q_2,g_loss=0):
+    def log_gen(self, sess, epoch, cross_p_q_2,train_info=[0,0]):
         cross_p_q = self.cross_p_q(sess)
         cross_q_p = self.cross_q_p(sess)
-        ent_p = sess.run(self.generator.pretrain_loss,
-            {self.generator.x: self.generator.generate(sess)})
+        feed = {self.generator.x: self.generator.generate(sess)}
+        ent_p = sess.run(self.generator.pretrain_loss,feed)
+        g_loss = train_info[0]
+        grad_len = train_info[1]
         sess.run(self.all_summary_ops)
         #sess.run([self._step_gen.assign(epoch)])
         sess.run([self._step_gen.assign_add(1)])
@@ -168,8 +173,10 @@ class GanTrainer:
             self._cross_p_q_2.assign(cross_p_q_2),
             self._cross_q_p.assign(cross_q_p),
             self.ent_p.assign(ent_p),
-            self.rein_max_ent.assign(g_loss)
+            self.rein_max_ent.assign(g_loss),
+            self.grad_len(grad_len)
         ])
+        sess.run()
         sess.run(self.writer_flush)
             
         
@@ -264,14 +271,14 @@ class GanTrainer:
         for total_batch in range(TOTAL_BATCH):
             # Train the generator for one step
             t1  = time.time()
-            g_loss = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
+            train_info = self.advtrain_gen(sess, epochs_generator, rollout_num, ent_temp)
             t2  = time.time()
             print('Time g_train: {}'.format(t2-t1))
             t2 = t1
             # Test
             #if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
             t1  = time.time()
-            self.log_gen(sess, total_batch, self.cross_p_q_2(sess), g_loss)
+            self.log_gen(sess, total_batch, self.cross_p_q_2(sess), train_info)
             t2  = time.time()
             print('Time log_gen: {}'.format(t2-t1))
             t2 = t1
@@ -306,26 +313,18 @@ class GanTrainer:
 
     def advtrain_gen(self,sess,epochs_generator,rollout_num,ent_temp):
         # Train the generator for one step
-        if self.rewards_reduced_variance:
-            for it in range(epochs_generator):
-                samples = self.generator.generate(sess)
+        for it in range(epochs_generator):
+            samples = self.generator.generate(sess)    
+            if self.rewards_reduced_variance:
                 rewards = self.rollout.get_reward(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
-                feed = {self.generator.x: samples, self.generator.rewards: rewards}
-                _ = sess.run(self.generator.g_updates, feed_dict=feed)
-            # TODO: BU NE??? THIS TRAINS GENERATOR/LSTM. WHY???
-            # Update roll-out parameters
-            self.rollout.update_params()
-        else:
-            for it in range(epochs_generator):
-                samples = self.generator.generate(sess)
+            else:
                 rewards = self.rollout.get_reward_2(sess, samples, rollout_num, self.discriminator, ent_temp=ent_temp)
-                feed = {self.generator.x: samples, self.generator.rewards: rewards}
-                _ = sess.run(self.generator.g_updates, feed_dict=feed)
-        #test_loss = - self.target.ll(samples=samples,sess=sess) if self.target is not None else math.nan
-        #print("rollout --- %s seconds ---" % (time.time() - start_time))
-        # Train the discriminator
-        g_loss = sess.run(self.generator.g_loss, feed_dict=feed)
-        return g_loss
+            feed = {self.generator.x: samples, self.generator.rewards: rewards}
+            _ = sess.run(self.generator.g_updates, feed_dict=feed)
+        if self.rewards_reduced_variance:
+            self.rollout.update_params()
+        train_info = sess.run([self.generator.g_loss,self.generator.grad_norm], feed_dict=feed)
+        return train_info
 
     def advtrain_disc(self,sess,saver,epochs_discriminator,DIS_EPOCHS_PR_BATCH,
         BATCH_SIZE, generated_num, positive_file, negative_file, dis_dropout_keep_prob):
